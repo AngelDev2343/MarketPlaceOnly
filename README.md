@@ -4,7 +4,7 @@ App Android minimalista para usar Facebook Marketplace sin distracciones. Sin fe
 
 ## Descarga
 
-Descarga el APK más reciente desde  e instálalo directamente en tu Android.
+[⬇️ Descargar APK](https://github.com/AngelDev2343/MarketPlaceOnly/releases/download/1.0/app-debug.apk)
 
 > Asegúrate de tener activada la opción **Instalar apps de fuentes desconocidas** en los ajustes de tu dispositivo.
 
