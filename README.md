@@ -23,6 +23,29 @@
 
 ---
 
+## 📱 Capturas
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/ec3b255a-e7af-4938-bdc6-8b48fb647906" width="200"/>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/906e8306-2954-43ca-ab17-c5012813e199" width="200"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/68d99013-a429-4672-b6da-407086352e9a" width="200"/>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/72300ac9-6141-4611-a162-3d0a19cc2c15" width="200"/>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 🎯 Objetivo del proyecto
 
 MarketplaceOnly nace de una necesidad concreta:
