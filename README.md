@@ -7,7 +7,7 @@
 ![No Ads](https://img.shields.io/badge/ads-none-blue)
 ![No Tracking](https://img.shields.io/badge/tracking-none-blue)
 
-**MarketplaceOnly** es una app Android minimalista que te permite usar **Facebook Marketplace** sin distracciones. Sin feed, sin reels, sin amigos — solo lo que importa: comprar y vender.
+**MarketplaceOnly** es una app Android minimalista que te permite usar **Facebook Marketplace** sin distracciones. Sin feed, sin reels, sin amigos — solo lo que importa: comprar.
 
 ---
 
