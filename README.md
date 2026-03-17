@@ -38,10 +38,8 @@ Facebook está diseñado para mantenerte dentro de su ecosistema. Esta app rompe
 - 🏠 **Apertura directa** en Facebook Marketplace al iniciar la app
 - 🚫 **Bloqueo automático** de feed, reels, amigos, watch, grupos, mensajes y notificaciones
 - 🔄 **Redirección inteligente** — cualquier intento de salir de Marketplace vuelve al inicio
-- 🔍 **Buscador integrado** con botón flotante, independiente del buscador nativo de Facebook
-- ← **Botón flotante de regreso** al ver un artículo para volver al listado fácilmente
 - 📱 **Botón atrás nativo** del teléfono completamente funcional
-- 🚫 Sin publicidad adicional, sin tracking, sin cuentas propias
+- 🚫 Sin publicidad adicional, sin tracking, sin cuentas propias.
 
 ---
 
@@ -55,7 +53,6 @@ La app está construida sobre un único bloque funcional:
 - Carga directa de `facebook.com/marketplace`
 - Interceptación de navegación para bloquear URLs no permitidas
 - Redirección automática al Marketplace ante cualquier desvío
-- Buscador flotante que inyecta términos directamente en la URL de Marketplace
 
 Todo ocurre en tu dispositivo.
 
@@ -102,7 +99,7 @@ Sin procesamiento en la nube.
 No. El login ocurre directamente en los servidores de Facebook a través del WebView, igual que en un navegador.
 
 ### ¿Por qué veo una pantalla en blanco al iniciar sesión?
-Facebook detectó múltiples intentos de login en poco tiempo. Esperá 15–30 minutos y luego andá a Ajustes → Apps → MarketplaceOnly → Borrar datos.
+Facebook detectó múltiples intentos de login en poco tiempo.
 
 ### ¿Funciona sin cuenta de Facebook?
 No. Se necesita una cuenta de Facebook activa para usar Marketplace.
