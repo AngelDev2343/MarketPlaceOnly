@@ -1,33 +1,118 @@
-# MarketplaceOnly
+# 🛒 MarketplaceOnly
 
-App Android minimalista para usar Facebook Marketplace sin distracciones. Sin feed, sin reels, sin amigos, solo Marketplace.
+![Status](https://img.shields.io/badge/status-stable-success)
+![Platform](https://img.shields.io/badge/platform-Android-green)
+![Android](https://img.shields.io/badge/Android-6.0%2B-brightgreen)
+![Kotlin](https://img.shields.io/badge/made%20with-Kotlin-7F52FF?logo=kotlin&logoColor=white)
+![No Ads](https://img.shields.io/badge/ads-none-blue)
+![No Tracking](https://img.shields.io/badge/tracking-none-blue)
 
-## Descarga
+**MarketplaceOnly** es una app Android minimalista que te permite usar **Facebook Marketplace** sin distracciones. Sin feed, sin reels, sin amigos — solo lo que importa: comprar y vender.
 
-[⬇️ Descargar APK](https://github.com/AngelDev2343/MarketPlaceOnly/releases/download/1.1/app-debug.apk)
+---
 
-> Asegúrate de tener activada la opción **Instalar apps de fuentes desconocidas** en los ajustes de tu dispositivo.
+## ⬇️ Descarga
 
-## Funcionalidades
+<div align="center">
 
-- Abre directamente en Facebook Marketplace al iniciar
-- Bloquea automáticamente feed, reels, friends, watch, groups, mensajes y notificaciones
-- Redirige cualquier intento de salir de Marketplace de vuelta al inicio
-- Buscador integrado con botón flotante — sin depender del buscador nativo de Facebook
-- Botón de regreso flotante al ver un artículo para volver al listado fácilmente
-- Botón atrás del teléfono funciona de forma nativa
-- Sin publicidad, sin tracking adicional, sin cuentas
+[📦 Descargar APK — v1.1](https://github.com/AngelDev2343/MarketPlaceOnly/releases/download/1.1/app-debug.apk)
 
-## Requisitos
+</div>
 
-- Android 6.0 (Marshmallow) o superior
-- Conexión a internet
+> **Nota:** Activa **Instalar apps de fuentes desconocidas** en Ajustes → Seguridad antes de instalar.
 
-## Notas
+---
 
-- Si ves una pantalla en blanco al iniciar sesión, espera 15-30 minutos y borra los datos de la app desde Ajustes → Apps → MarketplaceOnly → Borrar datos. Esto ocurre cuando Facebook detecta múltiples intentos de login en poco tiempo.
-- Esta app es un WebView de Facebook Marketplace. No almacena ni transmite ningún dato — todo pasa directamente entre tu dispositivo y los servidores de Facebook.
+## 🎯 Objetivo del proyecto
 
-## Aviso legal
+MarketplaceOnly nace de una necesidad concreta:
 
-Esta app no está afiliada, asociada, autorizada ni respaldada por Meta Platforms, Inc. Facebook y Marketplace son marcas registradas de Meta Platforms, Inc.
+> Usar Facebook Marketplace sin que el algoritmo te arrastre al feed.
+
+Facebook está diseñado para mantenerte dentro de su ecosistema. Esta app rompe ese ciclo — accedés directo al Marketplace, sin distracciones, sin contenido no solicitado.
+
+---
+
+## ✨ Funcionalidades
+
+- 🏠 **Apertura directa** en Facebook Marketplace al iniciar la app
+- 🚫 **Bloqueo automático** de feed, reels, amigos, watch, grupos, mensajes y notificaciones
+- 🔄 **Redirección inteligente** — cualquier intento de salir de Marketplace vuelve al inicio
+- 🔍 **Buscador integrado** con botón flotante, independiente del buscador nativo de Facebook
+- ← **Botón flotante de regreso** al ver un artículo para volver al listado fácilmente
+- 📱 **Botón atrás nativo** del teléfono completamente funcional
+- 🚫 Sin publicidad adicional, sin tracking, sin cuentas propias
+
+---
+
+## 🧠 Arquitectura general
+
+La app está construida sobre un único bloque funcional:
+
+### 📱 WebView controlado
+
+- Desarrollado en **Kotlin**
+- Carga directa de `facebook.com/marketplace`
+- Interceptación de navegación para bloquear URLs no permitidas
+- Redirección automática al Marketplace ante cualquier desvío
+- Buscador flotante que inyecta términos directamente en la URL de Marketplace
+
+Todo ocurre en tu dispositivo.
+
+Sin servidores propios.\
+Sin almacenamiento externo.\
+Sin procesamiento en la nube.
+
+---
+
+## ⚙️ Requisitos
+
+| Requisito | Mínimo |
+|---|---|
+| Android | 6.0 (Marshmallow) o superior |
+| Conexión | Internet requerida |
+| Cuenta | Cuenta de Facebook existente |
+
+---
+
+## 🔐 Privacidad
+
+- No se almacenan datos de sesión propios
+- No se transmite ningún dato a servidores externos
+- No hay backend propio
+- No hay cuentas adicionales
+- Todo el tráfico va directamente entre tu dispositivo y los servidores de Facebook
+
+> Esta app es un WebView de Facebook Marketplace. Actúa como un navegador dedicado — nada más.
+
+---
+
+## 🛠️ Estado del proyecto
+
+- **Estado:** Estable
+- **Versión actual:** 1.1
+- **Naturaleza:** Utilidad minimalista
+- **Enfoque:** Productividad y foco
+
+---
+
+## ❓ FAQ
+
+### ¿La app almacena mis credenciales de Facebook?
+No. El login ocurre directamente en los servidores de Facebook a través del WebView, igual que en un navegador.
+
+### ¿Por qué veo una pantalla en blanco al iniciar sesión?
+Facebook detectó múltiples intentos de login en poco tiempo. Esperá 15–30 minutos y luego andá a Ajustes → Apps → MarketplaceOnly → Borrar datos.
+
+### ¿Funciona sin cuenta de Facebook?
+No. Se necesita una cuenta de Facebook activa para usar Marketplace.
+
+### ¿Es compatible con Facebook Marketplace de mi país?
+Depende de la disponibilidad de Marketplace en tu región. La app no modifica la disponibilidad geográfica del servicio.
+
+---
+
+## ⚠️ Aviso legal
+
+Esta app no está afiliada, asociada, autorizada ni respaldada por **Meta Platforms, Inc.**
+Facebook y Marketplace son marcas registradas de Meta Platforms, Inc.
