@@ -91,7 +91,7 @@ Sin procesamiento en la nube.
 |---|---|
 | Android | 6.0 (Marshmallow) o superior |
 | Conexión | Internet requerida |
-| Cuenta | Cuenta de Facebook existente |
+| Cuenta | Cuenta de Facebook existente o registrarte dentro |
 
 ---
 
