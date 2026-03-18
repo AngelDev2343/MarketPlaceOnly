@@ -121,11 +121,8 @@ Sin procesamiento en la nube.
 ### ¿La app almacena mis credenciales de Facebook?
 No. El login ocurre directamente en los servidores de Facebook a través del WebView, igual que en un navegador.
 
-### ¿Por qué veo una pantalla en blanco al iniciar sesión?
-Facebook detectó múltiples intentos de login en poco tiempo.
-
 ### ¿Funciona sin cuenta de Facebook?
-No. Se necesita una cuenta de Facebook activa para usar Marketplace.
+Si, pero de manera limitada.
 
 ### ¿Es compatible con Facebook Marketplace de mi país?
 Depende de la disponibilidad de Marketplace en tu región. La app no modifica la disponibilidad geográfica del servicio.
