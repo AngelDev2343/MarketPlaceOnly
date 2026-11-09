@@ -10,20 +10,24 @@ import android.view.View
 
 class MainActivity : AppCompatActivity() {
 
-    val marketplace = "https://touch.facebook.com/marketplace"
+    // Mobile Chrome UA pairs better with m.facebook.com than with the old desktop-Firefox + touch combo.
+    val marketplace = "https://m.facebook.com/marketplace"
     private lateinit var webView: WebView
     private lateinit var overlay: FrameLayout
 
-    /** Paths that must keep working (login, marketplace, seller chat under marketplace). */
+    /** Paths that must keep working (login, captcha, marketplace, seller chat). */
     private val allowedPrefixes = listOf(
         "/marketplace",
         "/login",
         "/checkpoint",
+        "/captcha",
         "/two_step_verification",
         "/recover",
         "/confirmemail",
         "/security",
         "/auth",
+        "/interop",
+        "/password",
     )
 
     /** Exact path matches for the news feed / home. */
@@ -68,14 +72,16 @@ class MainActivity : AppCompatActivity() {
         webView.settings.javaScriptCanOpenWindowsAutomatically = true
         webView.settings.loadWithOverviewMode = true
         webView.settings.useWideViewPort = true
-        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+        webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        // Look like regular Chrome for Android (not a WebView / not desktop Firefox).
+        webView.settings.userAgentString = chromeLikeUserAgent()
         webView.isScrollbarFadingEnabled = true
         webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
 
         // CAMBIO 1: dejar que los eventos touch lleguen al contenido sin que
         // el ViewGroup padre los intercepte. Esto permite que los divs internos
         // de Facebook (scroll virtualizado) reciban el touchmove correctamente.
-        webView.setOnTouchListener { v, event ->
+        webView.setOnTouchListener { v, _ ->
             v.parent?.requestDisallowInterceptTouchEvent(true)
             false
         }
@@ -113,7 +119,12 @@ class MainActivity : AppCompatActivity() {
                 if (url == "about:blank") return false
                 if (!url.startsWith("http://") && !url.startsWith("https://")) return true
 
-                if (host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me")) {
+                // Captcha / challenge frames (Arkose etc.) must load inside the WebView.
+                if (isCaptchaHost(host)) {
+                    return false
+                }
+
+                if (isFacebookHost(host)) {
                     if (isDistractionUrl(uri)) {
                         overlay.visibility = View.VISIBLE
                         webView.post { webView.loadUrl(marketplace) }
@@ -138,6 +149,12 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 overlay.visibility = View.GONE
+
+                // Never inject CSS/JS redirect loop on login, checkpoint or captcha pages.
+                if (uri != null && isAuthOrCaptchaPage(uri)) {
+                    return
+                }
+
                 view?.evaluateJavascript("window._marketplaceWatcher = false;", null)
                 injectJs(view)
             }
@@ -156,39 +173,75 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Default WebView UA with "; wv" and "Version/4.0 " stripped so it looks like
+     * regular Chrome for Android (same engine, consistent fingerprint).
+     */
+    private fun chromeLikeUserAgent(): String {
+        val raw = WebSettings.getDefaultUserAgent(this)
+        return raw
+            .replace("; wv", "")
+            .replace("Version/4.0 ", "")
+            .trim()
+    }
+
+    private fun isFacebookHost(host: String): Boolean {
+        return host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me")
+    }
+
+    private fun isCaptchaHost(host: String): Boolean {
+        return host.endsWith("arkoselabs.com") ||
+            host.endsWith("funcaptcha.com") ||
+            host.endsWith("recaptcha.net") ||
+            host.endsWith("gstatic.com") ||
+            host.endsWith("fbcdn.net")
+    }
+
+    private fun normalizePath(path: String?): String {
+        var p = path ?: "/"
+        if (p.isEmpty()) p = "/"
+        if (p.length > 1 && p.endsWith("/")) {
+            p = p.dropLast(1)
+        }
+        return p
+    }
+
+    private fun pathAllowed(path: String): Boolean {
+        for (prefix in allowedPrefixes) {
+            if (path == prefix || path.startsWith("$prefix/")) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /** Login / checkpoint / captcha — leave the page alone (no overlay, no JS). */
+    private fun isAuthOrCaptchaPage(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        if (isCaptchaHost(host)) return true
+        if (!isFacebookHost(host)) return false
+        val path = normalizePath(uri.path)
+        // Everything in the allowlist except marketplace itself is auth-sensitive.
+        if (path == "/marketplace" || path.startsWith("/marketplace/")) return false
+        return pathAllowed(path)
+    }
+
+    /**
      * True when the URL is the news feed, stories, or another distraction page.
      * Root "/" is an exact-path match only, so /marketplace, /login, etc. stay open.
      */
     private fun isDistractionUrl(uri: Uri): Boolean {
         val host = uri.host ?: return false
-        if (!(host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me"))) {
-            return false
-        }
+        if (!isFacebookHost(host)) return false
 
-        var path = uri.path ?: "/"
-        if (path.isEmpty()) path = "/"
-        // Normalize trailing slash except for root
-        if (path.length > 1 && path.endsWith("/")) {
-            path = path.dropLast(1)
-        }
+        val path = normalizePath(uri.path)
 
-        for (prefix in allowedPrefixes) {
-            if (path == prefix || path.startsWith("$prefix/")) {
-                return false
-            }
-        }
+        if (pathAllowed(path)) return false
 
-        if (path in feedExactPaths) {
-            return true
-        }
+        if (path in feedExactPaths) return true
 
         for (prefix in blockedPrefixes) {
             val normalized = prefix.trimEnd('/')
             if (path == normalized || path.startsWith("$normalized/")) {
-                return true
-            }
-            // Keep matching "/reel/" style when the stored prefix has a trailing slash
-            if (prefix.endsWith("/") && path.startsWith(prefix.trimEnd('/'))) {
                 return true
             }
         }
@@ -202,9 +255,10 @@ class MainActivity : AppCompatActivity() {
                 if (window._marketplaceWatcher) return;
                 window._marketplaceWatcher = true;
 
-                var allowed = ['/marketplace', '/login', '/checkpoint', '/two_step_verification', '/recover', '/confirmemail', '/security', '/auth'];
+                var allowed = ['/marketplace', '/login', '/checkpoint', '/captcha', '/two_step_verification', '/recover', '/confirmemail', '/security', '/auth', '/interop', '/password'];
                 var feedExact = ['/', '/home', '/home.php', '/feed', '/index.php'];
                 var blockedPrefixes = ['/stories', '/story.php', '/reel', '/reels', '/friends', '/watch', '/groups', '/messages', '/gaming', '/notifications', '/menu'];
+                var marketplaceUrl = 'https://m.facebook.com/marketplace';
 
                 function normalizePath(path) {
                     if (!path || path === '') return '/';
@@ -214,11 +268,20 @@ class MainActivity : AppCompatActivity() {
                     return path;
                 }
 
+                function isAuthPage(path) {
+                    for (var i = 0; i < allowed.length; i++) {
+                        if (allowed[i] === '/marketplace') continue;
+                        if (path === allowed[i] || path.indexOf(allowed[i] + '/') === 0) return true;
+                    }
+                    return false;
+                }
+
                 function isBlocked(url) {
                     try {
                         var u = new URL(url);
                         var path = normalizePath(u.pathname);
-
+                        // Never redirect away from login / captcha / checkpoint.
+                        if (isAuthPage(path)) return false;
                         for (var i = 0; i < allowed.length; i++) {
                             if (path === allowed[i] || path.indexOf(allowed[i] + '/') === 0) return false;
                         }
@@ -271,9 +334,12 @@ class MainActivity : AppCompatActivity() {
 
                 setInterval(function() {
                     var url = window.location.href;
+                    var path = '/';
+                    try { path = normalizePath(new URL(url).pathname); } catch (e) {}
+                    if (isAuthPage(path)) return;
                     if (isBlocked(url)) {
                         Android.showOverlay();
-                        window.location.href = 'https://touch.facebook.com/marketplace';
+                        window.location.href = marketplaceUrl;
                         return;
                     }
                     hideElements();
