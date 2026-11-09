@@ -1,5 +1,6 @@
 package com.marketplace.only
 
+import android.net.Uri
 import android.os.Bundle
 import android.webkit.*
 import android.graphics.Color
@@ -12,6 +13,42 @@ class MainActivity : AppCompatActivity() {
     val marketplace = "https://touch.facebook.com/marketplace"
     private lateinit var webView: WebView
     private lateinit var overlay: FrameLayout
+
+    /** Paths that must keep working (login, marketplace, seller chat under marketplace). */
+    private val allowedPrefixes = listOf(
+        "/marketplace",
+        "/login",
+        "/checkpoint",
+        "/two_step_verification",
+        "/recover",
+        "/confirmemail",
+        "/security",
+        "/auth",
+    )
+
+    /** Exact path matches for the news feed / home. */
+    private val feedExactPaths = setOf(
+        "/",
+        "/home",
+        "/home.php",
+        "/feed",
+        "/index.php",
+    )
+
+    /** Path prefixes for stories and other distractions matched by startsWith. */
+    private val blockedPrefixes = listOf(
+        "/stories",
+        "/story.php",
+        "/reel/",
+        "/reels",
+        "/friends",
+        "/watch",
+        "/groups",
+        "/messages",
+        "/gaming",
+        "/notifications",
+        "/menu",
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,32 +106,19 @@ class MainActivity : AppCompatActivity() {
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                val url = request?.url.toString()
-                val host = request?.url?.host ?: ""
+                val uri = request?.url ?: return true
+                val url = uri.toString()
+                val host = uri.host ?: ""
 
                 if (url == "about:blank") return false
                 if (!url.startsWith("http://") && !url.startsWith("https://")) return true
 
                 if (host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me")) {
-                    val blocked = listOf(
-                        "facebook.com/reel/",
-                        "facebook.com/friends",
-                        "facebook.com/watch",
-                        "facebook.com/groups",
-                        "facebook.com/messages",
-                        "facebook.com/gaming",
-                        "facebook.com/notifications",
-                        "facebook.com/menu",
-                    )
-
-                    for (b in blocked) {
-                        if (url.contains(b)) {
-                            overlay.visibility = View.VISIBLE
-                            webView.post { webView.loadUrl(marketplace) }
-                            return true
-                        }
+                    if (isDistractionUrl(uri)) {
+                        overlay.visibility = View.VISIBLE
+                        webView.post { webView.loadUrl(marketplace) }
+                        return true
                     }
-
                     return false
                 }
 
@@ -106,16 +130,8 @@ class MainActivity : AppCompatActivity() {
 
                 CookieManager.getInstance().flush()
 
-                val isBlocked = url?.contains("facebook.com/friends") == true ||
-                        url?.contains("facebook.com/reel/") == true ||
-                        url?.contains("facebook.com/watch") == true ||
-                        url?.contains("facebook.com/groups") == true ||
-                        url?.contains("facebook.com/messages") == true ||
-                        url?.contains("facebook.com/gaming") == true ||
-                        url?.contains("facebook.com/notifications") == true ||
-                        url?.contains("facebook.com/menu") == true
-
-                if (isBlocked) {
+                val uri = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                if (uri != null && isDistractionUrl(uri)) {
                     overlay.visibility = View.VISIBLE
                     view?.loadUrl(marketplace)
                     return
@@ -139,19 +155,84 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(marketplace)
     }
 
+    /**
+     * True when the URL is the news feed, stories, or another distraction page.
+     * Root "/" is an exact-path match only, so /marketplace, /login, etc. stay open.
+     */
+    private fun isDistractionUrl(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        if (!(host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me"))) {
+            return false
+        }
+
+        var path = uri.path ?: "/"
+        if (path.isEmpty()) path = "/"
+        // Normalize trailing slash except for root
+        if (path.length > 1 && path.endsWith("/")) {
+            path = path.dropLast(1)
+        }
+
+        for (prefix in allowedPrefixes) {
+            if (path == prefix || path.startsWith("$prefix/")) {
+                return false
+            }
+        }
+
+        if (path in feedExactPaths) {
+            return true
+        }
+
+        for (prefix in blockedPrefixes) {
+            val normalized = prefix.trimEnd('/')
+            if (path == normalized || path.startsWith("$normalized/")) {
+                return true
+            }
+            // Keep matching "/reel/" style when the stored prefix has a trailing slash
+            if (prefix.endsWith("/") && path.startsWith(prefix.trimEnd('/'))) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     private fun injectJs(view: WebView?) {
         val js = """
             (function() {
                 if (window._marketplaceWatcher) return;
                 window._marketplaceWatcher = true;
 
-                var blocked = ['facebook.com/friends', 'facebook.com/reel/', 'facebook.com/watch', 'facebook.com/groups', 'facebook.com/messages', 'facebook.com/gaming', 'facebook.com/notifications', 'facebook.com/menu'];
+                var allowed = ['/marketplace', '/login', '/checkpoint', '/two_step_verification', '/recover', '/confirmemail', '/security', '/auth'];
+                var feedExact = ['/', '/home', '/home.php', '/feed', '/index.php'];
+                var blockedPrefixes = ['/stories', '/story.php', '/reel', '/reels', '/friends', '/watch', '/groups', '/messages', '/gaming', '/notifications', '/menu'];
+
+                function normalizePath(path) {
+                    if (!path || path === '') return '/';
+                    if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+                        return path.slice(0, -1);
+                    }
+                    return path;
+                }
 
                 function isBlocked(url) {
-                    for (var i = 0; i < blocked.length; i++) {
-                        if (url.indexOf(blocked[i]) !== -1) return true;
+                    try {
+                        var u = new URL(url);
+                        var path = normalizePath(u.pathname);
+
+                        for (var i = 0; i < allowed.length; i++) {
+                            if (path === allowed[i] || path.indexOf(allowed[i] + '/') === 0) return false;
+                        }
+                        for (var j = 0; j < feedExact.length; j++) {
+                            if (path === feedExact[j]) return true;
+                        }
+                        for (var k = 0; k < blockedPrefixes.length; k++) {
+                            var p = blockedPrefixes[k];
+                            if (path === p || path.indexOf(p + '/') === 0) return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        return false;
                     }
-                    return false;
                 }
 
                 // CAMBIO 2: stopPropagation en touchmove para que los divs internos
@@ -171,7 +252,16 @@ class MainActivity : AppCompatActivity() {
                         [role="tablist"] { display: none !important; }
                         [role="banner"] { display: none !important; }
                         [aria-label="Menú"] { display: none !important; }
+                        [aria-label="Menu"] { display: none !important; }
                         [aria-label="Buscar en Facebook"] { display: none !important; }
+                        [aria-label="Search Facebook"] { display: none !important; }
+                        [aria-label="Stories"] { display: none !important; }
+                        [aria-label="Historias"] { display: none !important; }
+                        [aria-label="Histórias"] { display: none !important; }
+                        [aria-label="Story"] { display: none !important; }
+                        [data-pagelet*="Story"] { display: none !important; }
+                        [data-pagelet*="Stories"] { display: none !important; }
+                        [data-pagelet*="FeedUnit"] { display: none !important; }
                         svg[viewBox="0 0 44 44"] { display: none !important; }
                         html, body { overflow-y: auto !important; touch-action: pan-y !important; }
                         * { touch-action: pan-y pinch-zoom !important; }

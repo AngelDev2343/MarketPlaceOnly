@@ -10,8 +10,8 @@ android {
         applicationId = "com.marketplace.only"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.2"
     }
 
     compileOptions {
