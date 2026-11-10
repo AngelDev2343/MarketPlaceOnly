@@ -1,5 +1,6 @@
 package com.marketplace.only
 
+import android.net.Uri
 import android.os.Bundle
 import android.webkit.*
 import android.graphics.Color
@@ -9,9 +10,49 @@ import android.view.View
 
 class MainActivity : AppCompatActivity() {
 
-    val marketplace = "https://touch.facebook.com/marketplace"
+    // Mobile Chrome UA pairs better with m.facebook.com than with the old desktop-Firefox + touch combo.
+    val marketplace = "https://m.facebook.com/marketplace"
     private lateinit var webView: WebView
     private lateinit var overlay: FrameLayout
+
+    /** Paths that must keep working (login, captcha, marketplace, seller chat). */
+    private val allowedPrefixes = listOf(
+        "/marketplace",
+        "/login",
+        "/checkpoint",
+        "/captcha",
+        "/two_step_verification",
+        "/recover",
+        "/confirmemail",
+        "/security",
+        "/auth",
+        "/interop",
+        "/password",
+    )
+
+    /** Exact path matches for the news feed / home. */
+    private val feedExactPaths = setOf(
+        "/",
+        "/home",
+        "/home.php",
+        "/feed",
+        "/index.php",
+    )
+
+    /** Path prefixes for stories and other distractions matched by startsWith. */
+    private val blockedPrefixes = listOf(
+        "/stories",
+        "/story.php",
+        "/reel/",
+        "/reels",
+        "/friends",
+        "/watch",
+        "/groups",
+        "/messages",
+        "/gaming",
+        "/notifications",
+        "/menu",
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +72,16 @@ class MainActivity : AppCompatActivity() {
         webView.settings.javaScriptCanOpenWindowsAutomatically = true
         webView.settings.loadWithOverviewMode = true
         webView.settings.useWideViewPort = true
-        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+        webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        // Look like regular Chrome for Android (not a WebView / not desktop Firefox).
+        webView.settings.userAgentString = chromeLikeUserAgent()
         webView.isScrollbarFadingEnabled = true
         webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
 
         // CAMBIO 1: dejar que los eventos touch lleguen al contenido sin que
         // el ViewGroup padre los intercepte. Esto permite que los divs internos
         // de Facebook (scroll virtualizado) reciban el touchmove correctamente.
-        webView.setOnTouchListener { v, event ->
+        webView.setOnTouchListener { v, _ ->
             v.parent?.requestDisallowInterceptTouchEvent(true)
             false
         }
@@ -69,32 +112,24 @@ class MainActivity : AppCompatActivity() {
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                val url = request?.url.toString()
-                val host = request?.url?.host ?: ""
+                val uri = request?.url ?: return true
+                val url = uri.toString()
+                val host = uri.host ?: ""
 
                 if (url == "about:blank") return false
                 if (!url.startsWith("http://") && !url.startsWith("https://")) return true
 
-                if (host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me")) {
-                    val blocked = listOf(
-                        "facebook.com/reel/",
-                        "facebook.com/friends",
-                        "facebook.com/watch",
-                        "facebook.com/groups",
-                        "facebook.com/messages",
-                        "facebook.com/gaming",
-                        "facebook.com/notifications",
-                        "facebook.com/menu",
-                    )
+                // Captcha / challenge frames (Arkose etc.) must load inside the WebView.
+                if (isCaptchaHost(host)) {
+                    return false
+                }
 
-                    for (b in blocked) {
-                        if (url.contains(b)) {
-                            overlay.visibility = View.VISIBLE
-                            webView.post { webView.loadUrl(marketplace) }
-                            return true
-                        }
+                if (isFacebookHost(host)) {
+                    if (isDistractionUrl(uri)) {
+                        overlay.visibility = View.VISIBLE
+                        webView.post { webView.loadUrl(marketplace) }
+                        return true
                     }
-
                     return false
                 }
 
@@ -106,22 +141,20 @@ class MainActivity : AppCompatActivity() {
 
                 CookieManager.getInstance().flush()
 
-                val isBlocked = url?.contains("facebook.com/friends") == true ||
-                        url?.contains("facebook.com/reel/") == true ||
-                        url?.contains("facebook.com/watch") == true ||
-                        url?.contains("facebook.com/groups") == true ||
-                        url?.contains("facebook.com/messages") == true ||
-                        url?.contains("facebook.com/gaming") == true ||
-                        url?.contains("facebook.com/notifications") == true ||
-                        url?.contains("facebook.com/menu") == true
-
-                if (isBlocked) {
+                val uri = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                if (uri != null && isDistractionUrl(uri)) {
                     overlay.visibility = View.VISIBLE
                     view?.loadUrl(marketplace)
                     return
                 }
 
                 overlay.visibility = View.GONE
+
+                // Never inject CSS/JS redirect loop on login, checkpoint or captcha pages.
+                if (uri != null && isAuthOrCaptchaPage(uri)) {
+                    return
+                }
+
                 view?.evaluateJavascript("window._marketplaceWatcher = false;", null)
                 injectJs(view)
             }
@@ -139,19 +172,130 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(marketplace)
     }
 
+    /**
+     * Default WebView UA with "; wv" and "Version/4.0 " stripped so it looks like
+     * regular Chrome for Android (same engine, consistent fingerprint).
+     */
+    private fun chromeLikeUserAgent(): String {
+        val raw = WebSettings.getDefaultUserAgent(this)
+        return raw
+            .replace("; wv", "")
+            .replace("Version/4.0 ", "")
+            .trim()
+    }
+
+    private fun isFacebookHost(host: String): Boolean {
+        return host.endsWith("facebook.com") || host.endsWith("fb.com") || host.endsWith("fb.me")
+    }
+
+    private fun isCaptchaHost(host: String): Boolean {
+        return host.endsWith("arkoselabs.com") ||
+            host.endsWith("funcaptcha.com") ||
+            host.endsWith("recaptcha.net") ||
+            host.endsWith("gstatic.com") ||
+            host.endsWith("fbcdn.net")
+    }
+
+    private fun normalizePath(path: String?): String {
+        var p = path ?: "/"
+        if (p.isEmpty()) p = "/"
+        if (p.length > 1 && p.endsWith("/")) {
+            p = p.dropLast(1)
+        }
+        return p
+    }
+
+    private fun pathAllowed(path: String): Boolean {
+        for (prefix in allowedPrefixes) {
+            if (path == prefix || path.startsWith("$prefix/")) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /** Login / checkpoint / captcha — leave the page alone (no overlay, no JS). */
+    private fun isAuthOrCaptchaPage(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        if (isCaptchaHost(host)) return true
+        if (!isFacebookHost(host)) return false
+        val path = normalizePath(uri.path)
+        // Everything in the allowlist except marketplace itself is auth-sensitive.
+        if (path == "/marketplace" || path.startsWith("/marketplace/")) return false
+        return pathAllowed(path)
+    }
+
+    /**
+     * True when the URL is the news feed, stories, or another distraction page.
+     * Root "/" is an exact-path match only, so /marketplace, /login, etc. stay open.
+     */
+    private fun isDistractionUrl(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        if (!isFacebookHost(host)) return false
+
+        val path = normalizePath(uri.path)
+
+        if (pathAllowed(path)) return false
+
+        if (path in feedExactPaths) return true
+
+        for (prefix in blockedPrefixes) {
+            val normalized = prefix.trimEnd('/')
+            if (path == normalized || path.startsWith("$normalized/")) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     private fun injectJs(view: WebView?) {
         val js = """
             (function() {
                 if (window._marketplaceWatcher) return;
                 window._marketplaceWatcher = true;
 
-                var blocked = ['facebook.com/friends', 'facebook.com/reel/', 'facebook.com/watch', 'facebook.com/groups', 'facebook.com/messages', 'facebook.com/gaming', 'facebook.com/notifications', 'facebook.com/menu'];
+                var allowed = ['/marketplace', '/login', '/checkpoint', '/captcha', '/two_step_verification', '/recover', '/confirmemail', '/security', '/auth', '/interop', '/password'];
+                var feedExact = ['/', '/home', '/home.php', '/feed', '/index.php'];
+                var blockedPrefixes = ['/stories', '/story.php', '/reel', '/reels', '/friends', '/watch', '/groups', '/messages', '/gaming', '/notifications', '/menu'];
+                var marketplaceUrl = 'https://m.facebook.com/marketplace';
 
-                function isBlocked(url) {
-                    for (var i = 0; i < blocked.length; i++) {
-                        if (url.indexOf(blocked[i]) !== -1) return true;
+                function normalizePath(path) {
+                    if (!path || path === '') return '/';
+                    if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+                        return path.slice(0, -1);
+                    }
+                    return path;
+                }
+
+                function isAuthPage(path) {
+                    for (var i = 0; i < allowed.length; i++) {
+                        if (allowed[i] === '/marketplace') continue;
+                        if (path === allowed[i] || path.indexOf(allowed[i] + '/') === 0) return true;
                     }
                     return false;
+                }
+
+                function isBlocked(url) {
+                    try {
+                        var u = new URL(url);
+                        var path = normalizePath(u.pathname);
+                        // Never redirect away from login / captcha / checkpoint.
+                        if (isAuthPage(path)) return false;
+                        for (var i = 0; i < allowed.length; i++) {
+                            if (path === allowed[i] || path.indexOf(allowed[i] + '/') === 0) return false;
+                        }
+                        for (var j = 0; j < feedExact.length; j++) {
+                            if (path === feedExact[j]) return true;
+                        }
+                        for (var k = 0; k < blockedPrefixes.length; k++) {
+                            var p = blockedPrefixes[k];
+                            if (path === p || path.indexOf(p + '/') === 0) return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        return false;
+                    }
                 }
 
                 // CAMBIO 2: stopPropagation en touchmove para que los divs internos
@@ -171,7 +315,16 @@ class MainActivity : AppCompatActivity() {
                         [role="tablist"] { display: none !important; }
                         [role="banner"] { display: none !important; }
                         [aria-label="Menú"] { display: none !important; }
+                        [aria-label="Menu"] { display: none !important; }
                         [aria-label="Buscar en Facebook"] { display: none !important; }
+                        [aria-label="Search Facebook"] { display: none !important; }
+                        [aria-label="Stories"] { display: none !important; }
+                        [aria-label="Historias"] { display: none !important; }
+                        [aria-label="Histórias"] { display: none !important; }
+                        [aria-label="Story"] { display: none !important; }
+                        [data-pagelet*="Story"] { display: none !important; }
+                        [data-pagelet*="Stories"] { display: none !important; }
+                        [data-pagelet*="FeedUnit"] { display: none !important; }
                         svg[viewBox="0 0 44 44"] { display: none !important; }
                         html, body { overflow-y: auto !important; touch-action: pan-y !important; }
                         * { touch-action: pan-y pinch-zoom !important; }
@@ -181,9 +334,12 @@ class MainActivity : AppCompatActivity() {
 
                 setInterval(function() {
                     var url = window.location.href;
+                    var path = '/';
+                    try { path = normalizePath(new URL(url).pathname); } catch (e) {}
+                    if (isAuthPage(path)) return;
                     if (isBlocked(url)) {
                         Android.showOverlay();
-                        window.location.href = 'https://touch.facebook.com/marketplace';
+                        window.location.href = marketplaceUrl;
                         return;
                     }
                     hideElements();
